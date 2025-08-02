@@ -123,15 +123,15 @@ class Interviewer():
         
         try:
             while self.question_count < self.max_questions:
-                print(f"\n📝 Question {self.question_count + 1} of {self.max_questions}")
+                print(f"\n Question {self.question_count + 1} of {self.max_questions}")
                 
                 # Get interviewer question
                 response = self.interview_question()
                 if response is None:
-                    print("❌ Error generating question. Ending interview.")
+                    print(" Error generating question. Ending interview.")
                     break
                 
-                print(f"\n🤵 Interviewer: {response}")
+                print(f"\n Interviewer: {response}")
                 self.store_bot_response(response)
 
                 # Get user input
@@ -139,8 +139,8 @@ class Interviewer():
                 
                 # Handle quit command
                 if user_input.lower() == 'quit':
-                    print("\n🤵 Interviewer: Thank you for your time!")
-                    print("\n📋 Generating feedback...")
+                    print("\n Interviewer: Thank you for your time!")
+                    print("\n Generating feedback...")
                     return self.get_feedback()
                 
                 if not user_input:
@@ -152,15 +152,15 @@ class Interviewer():
                 self.question_count += 1
             
             # Interview completed naturally
-            print(f"\n🎉 Interview completed! You answered {self.question_count} questions.")
-            print("\n📋 Generating final feedback...")
+            print(f"\n Interview completed! You answered {self.question_count} questions.")
+            print("\n Generating final feedback...")
             return self.get_feedback()
             
         except KeyboardInterrupt:
-            print("\n\n⚠️ Interview interrupted by user.")
+            print("\n\n Interview interrupted by user.")
             return self.get_feedback()
         except Exception as e:
-            print(f"❌ Error running interview: {e}")
+            print(f" Error running interview: {e}")
             return None
 
 def main():
@@ -182,7 +182,7 @@ def main():
         max_questions = 5
         print("Using default: 5 questions")
     
-    print(f"\n✅ Starting {max_questions}-question interview for: {job_title}")
+    print(f"\n Starting {max_questions}-question interview for: {job_title}")
     
     # Create and run interviewer
     interviewer = Interviewer(max_questions, job_title)
@@ -192,14 +192,14 @@ def main():
         
         if final_feedback:
             print("\n" + "=" * 60)
-            print("📝 FINAL INTERVIEW FEEDBACK")
+            print(" FINAL INTERVIEW FEEDBACK")
             print("=" * 60)
             print(final_feedback)
         
-        print("\n🎉 Thank you for practicing! Good luck with your real interviews!")
+        print("\n Thank you for practicing! Good luck with your real interviews!")
         
     except Exception as e:
-        print(f"❌ An error occurred: {e}")
+        print(f" An error occurred: {e}")
 
 if __name__ == '__main__':
     main()
