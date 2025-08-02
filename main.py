@@ -1,11 +1,22 @@
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+import wave
+import sys
+import pyaudio
+from pynput import keyboard
+import threading
+import time
 
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+CHUNK = 1024
+FORMAT = pyaudio.paInt16
+CHANNELS = 1 if sys.platform == 'darwin' else 2
+RATE = 44100
     
 class Interviewer():
     def __init__(self, max_questions, job_title):
@@ -55,8 +66,145 @@ class Interviewer():
          return self.conversation_history
     
     def get_user_input(self):
+        recording = False           # Current recording status
+        should_stop = False        # Signal to end everything
+        audio_data = []           # Collected audio chunks
+        last_toggle_time = 0      # Prevent accidental double-clicks
+        
+        def on_press(key):
+            nonlocal recording, should_stop, last_toggle_time
+            
+            if key == keyboard.Key.space:
+                # Prevent accidental double-clicks
+                current_time = time.time()
+                if current_time - last_toggle_time < 0.3:
+                    return
+                last_toggle_time = current_time
+                
+                # Toggle recording state
+                recording = not recording
+                
+                if recording:
+                    print("🔴 Recording... (Press SPACEBAR again to stop)")
+                    # Clear any previous audio data
+                    audio_data.clear()
+                else:
+                    print("⏹️ Recording stopped. Processing...")
+                    
+            elif key == keyboard.Key.esc:
+                print("❌ Exiting...")
+                should_stop = True
+                recording = False
+                return False  # Stop the keyboard listener
+        def record_continuously():
+            nonlocal audio_data, recording, should_stop
+            
+            p = pyaudio.PyAudio()
+            stream = p.open(
+                format=FORMAT,
+                channels=CHANNELS,
+                rate=RATE,
+                input=True,
+                frames_per_buffer=CHUNK
+            )
+            
+            try:
+                while not should_stop:
+                    if recording:
+                        # Capture audio chunk
+                        try:
+                            data = stream.read(CHUNK, exception_on_overflow=False)
+                            audio_data.append(data)
+                        except Exception as e:
+                            print(f"Audio read error: {e}")
+                            break
+                    else:
+                        # Small sleep to prevent busy waiting
+                        time.sleep(0.01)
+                        
+            except Exception as e:
+                print(f"Recording error: {e}")
+            finally:
+                stream.close()
+                p.terminate()
+        def save_audio_file(audio_chunks, filename='user_response.wav'):
+            if not audio_chunks:
+                return False
+                
+            try:
+                with wave.open(filename, 'wb') as wf:
+                    p = pyaudio.PyAudio()
+                    wf.setnchannels(CHANNELS)
+                    wf.setsampwidth(p.get_sample_size(FORMAT))
+                    wf.setframerate(RATE)
+                    
+                    # Write all collected audio chunks
+                    for chunk in audio_chunks:
+                        wf.writeframes(chunk)
+                    
+                    p.terminate()
+                return True
+            except Exception as e:
+                print(f"Error saving audio: {e}")
+                return False
+
+        print("\n🎤 Audio Input Mode")
+        print("Press SPACEBAR to start/stop recording")
+        print("Press ESC to exit or Enter for text input")
+        
+        # Check if user wants text input instead
+        print("Press Enter now for text input, or any other key to continue with audio...")
+        # You might want to add a quick check here
+        
+        # Start audio recording thread
+        audio_thread = threading.Thread(target=record_continuously, daemon=True)
+        audio_thread.start()
+        
+        # Start keyboard listener and wait for completion
+        try:
+            with keyboard.Listener(on_press=on_press) as listener:
+                # Wait until recording is complete or user exits
+                while not should_stop and (recording or len(audio_data) == 0):
+                    time.sleep(0.1)
+                    
+            # If we have audio data, save and transcribe
+            if audio_data:
+                print("💾 Saving audio file...")
+                if save_audio_file(audio_data):
+                    return self.transcribe_audio('user_response.wav')
+                else:
+                    print("❌ Failed to save audio, falling back to text input")
+                    return input("Please type your response: ")
+            else:
+                print("ℹ️ No audio recorded, using text input")
+                return input("Please type your response: ")
+                
+        except KeyboardInterrupt:
+            print("\n⚠️ Interrupted by user")
+            should_stop = True
+            return input("Please type your response: ")   
+        
+        pass
+    
+    def transcribe_audio(self, filename):
+        # This is where you'll integrate with OpenAI Whisper
+        print("🔄 Transcribing audio...")
+        
+        try:
+            with open(filename, 'rb') as audio_file:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            print(f"📝 You said: {transcript.text}")
+            return transcript.text
+        except Exception as e:
+            print(f"❌ Transcription error: {e}")
+            return input("Transcription failed. Please type your response: ") 
+        
+    """def get_user_input(self):
         user_response = input("Response: ")
-        return user_response
+        return user_response"""
 
     def store_bot_response(self, system_response):
         self.conversation_history.append({'role': 'assistant', 'content': system_response})
