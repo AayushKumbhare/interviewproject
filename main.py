@@ -3,15 +3,19 @@ import os
 from dotenv import load_dotenv
 import wave
 import sys
-import pyaudio
+import pyaudio 
 from pynput import keyboard
 import threading
-import time
+import time 
+import hashlib
+from database import *
+from models import *
 
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 client = OpenAI(api_key=OPENAI_API_KEY)
+db = Database()
 
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
@@ -259,6 +263,34 @@ class Interviewer():
             print(f"Error getting feedback: {e}")
             return None
         
+    def message_database(self, interview_id):
+        try:
+            history = self.get_chat_history()
+            for item in history:
+                role = item['role']
+                message = item['content']
+                
+                message_db = Message(
+                    interview_id=interview_id,
+                    role=role,
+                    message=message)
+                
+                db.add_message(message_db)
+        except Exception as e:
+            print(f"Error: {e}")
+    
+    def feedback_database(self, interview_id, feedback):
+        try:
+            feedback_db = Feedback(
+                interview_id=interview_id,
+                feedback_text=feedback
+            )
+
+            db.add_feedback(feedback_db)
+        except Exception as e:
+            print(f"Error: {e}")
+                
+        
             
     def run_interview(self):
         print("=" * 60)
@@ -270,6 +302,36 @@ class Interviewer():
         print("-" * 60)
         
         try:
+            user_name = input("Enter your name: ")
+            user_email = input("Enter your email: ")
+            user_password = input("Enter your password: ")
+            
+            user_result = db.get_user(user_email)
+            if not user_result:
+                user = User(
+                    name=user_name,
+                    email=user_email,
+                    password_hash=hashlib.sha256(user_password.encode()).hexdigest())
+                db.add_user(user)
+                user_result = db.get_user(user_email)
+            
+            user_id = user_result['user_id']
+            
+            interview_name = input("Name of interview you want to access (type in new name if you want to make a new interview): ")
+            interview = db.get_interview(interview_name)
+            if not interview:
+                interview = Interview(
+                    user_id=user_id,
+                    name=interview_name,
+                    job_title=self.job_title,
+                    total_questions=self.max_questions,
+                    questions_answered=self.question_count
+                )
+                db.add_interview(interview)
+                interview = db.get_interview(interview_name)
+            
+            interview_id = interview['interview_id']
+
             while self.question_count < self.max_questions:
                 print(f"\n Question {self.question_count + 1} of {self.max_questions}")
                 
@@ -288,7 +350,11 @@ class Interviewer():
                 # Handle quit command
                 if user_input.lower() == 'quit':
                     print("\n Interviewer: Thank you for your time!")
+                    print("\n Storing history to database...")
+                    self.message_database(interview_id)
                     print("\n Generating feedback...")
+                    print("\n Storing feedback to database...")
+                    self.feedback_database(interview_id, self.get_feedback())
                     return self.get_feedback()
                 
                 if not user_input:
@@ -298,10 +364,16 @@ class Interviewer():
                 # Store user response and increment counter
                 self.store_user_response(user_input)
                 self.question_count += 1
+                db.supabase.table('interviews').update({'questions_answered': self.question_count}).eq('interview_id', interview_id).execute()
             
             # Interview completed naturally
             print(f"\n Interview completed! You answered {self.question_count} questions.")
+
+            print(f"Storing history to database...")
+            self.message_database(interview_id)
             print("\n Generating final feedback...")
+            print("\n Storing feedback to database...")
+            self.feedback_database(interview_id, self.get_feedback())
             return self.get_feedback()
             
         except KeyboardInterrupt:
