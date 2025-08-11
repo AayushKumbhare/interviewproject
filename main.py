@@ -42,7 +42,6 @@ class Interviewer():
         * Begin by introducing the interview and setting expectations.
         * Ask {self.max_questions} questions relevant to the job title, mixing: behavioral questions (e.g., STAR format), role-specific technical or strategic questions, and situational or problem-solving questions.
         * Use a professional tone, like an experienced interviewer at a reputable company.
-        * At the end, summarize the candidate's performance, provide constructie feedback on each answer, and suggest improvements. Be completely honest, as a real interviewer would be.
 
         """
         
